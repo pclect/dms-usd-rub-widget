@@ -2,7 +2,7 @@
   "id": "usdRubRate",
   "name": "USD/RUB Rate",
   "description": "Official daily USD to RUB exchange rate",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "author": "pclect",
   "icon": "currency",
   "type": "widget",

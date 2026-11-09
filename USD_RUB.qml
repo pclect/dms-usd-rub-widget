@@ -11,6 +11,7 @@ PluginComponent {
     property real previousRate: 0
     property string rateDate: ""
     property bool requestFailed: false
+    property int rateRetryAttempt: 0
 
     property var historyRates: []
     property bool historyLoading: false
@@ -25,6 +26,24 @@ PluginComponent {
         rate > previousRate ? " ↑"
         : rate < previousRate ? " ↓"
         : ""
+
+    function scheduleRateRetry() {
+        requestFailed = true
+
+        if (rateRetryTimer.running)
+            return
+
+        const delays = [10000, 20000, 40000, 60000]
+        const index = Math.min(rateRetryAttempt, delays.length - 1)
+
+        rateRetryTimer.interval = delays[index]
+        rateRetryAttempt = Math.min(
+            rateRetryAttempt + 1,
+            delays.length - 1
+        )
+
+        rateRetryTimer.start()
+    }
 
     function refreshRate() {
         const xhr = new XMLHttpRequest()
@@ -41,8 +60,8 @@ PluginComponent {
                 return
 
             if (xhr.status !== 200) {
-                root.requestFailed = true
-                return
+		root.scheduleRateRetry()                
+		return
             }
 
             try {
@@ -58,21 +77,23 @@ PluginComponent {
                 root.previousRate =
                     Number(usd.Previous) / Number(usd.Nominal)
 
-                root.rateDate = data.Date
-                root.requestFailed = false
+		root.rateDate = data.Date
+		root.requestFailed = false
+		root.rateRetryAttempt = 0
+		root.rateRetryTimer.stop()               
 
             } catch (error) {
                 console.log("USD/RUB: " + error)
-                root.requestFailed = true
+		root.scheduleRateRetry()       
             }
         }
 
         xhr.onerror = function() {
-            root.requestFailed = true
+	    root.scheduleRateRetry()
         }
 
         xhr.ontimeout = function() {
-            root.requestFailed = true
+	    root.scheduleRateRetry()
         }
 
         xhr.send()
@@ -193,7 +214,22 @@ PluginComponent {
         return ((last - first) / first) * 100
     }
 
-    Component.onCompleted: refreshRate()
+    Component.onCompleted: startupTimer.start()
+
+    Timer {
+        id: startupTimer
+        interval: 7000
+        repeat: false
+        onTriggered: root.refreshRate()
+    }
+
+    Timer {
+        id: rateRetryTimer
+        interval: 10000
+        running: false
+        repeat: false
+        onTriggered: root.refreshRate()
+    }
 
     Timer {
         interval: 3600000
